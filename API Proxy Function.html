@@ -1,0 +1,54 @@
+// This is your "secure assistant" or proxy.
+// It runs on a server, not in the user's browser.
+// Your API key is safe here and never exposed to the public.
+
+// The name of this file (e.g., api-proxy.js) will become part of its URL.
+// For example: https://your-website.com/api/api-proxy
+
+export default async function handler(request, response) {
+  // --- IMPORTANT SECURITY STEP ---
+  // Paste your secret Gemini API Key here.
+  const GEMINI_API_KEY = "AIzaSyA4MflQD98V5gdDZaMiuoH_3jm8Tf5QTeQ";
+  // --------------------------------
+
+  // Get the original request details from the user's browser
+  const { targetUrl, payload } = request.body;
+
+  // List of allowed Google API endpoints to prevent misuse
+  const allowedEndpoints = [
+    'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent',
+    'https://generativelanguage.googleapis.com/v1beta/models/imagen-3.0-generate-002:predict',
+    'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-tts:generateContent'
+  ];
+
+  if (!allowedEndpoints.includes(targetUrl)) {
+    return response.status(403).json({ error: "Forbidden: API endpoint not allowed." });
+  }
+
+  try {
+    // Securely call the Google API from the server, adding the secret key
+    const apiResponse = await fetch(`${targetUrl}?key=${GEMINI_API_KEY}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(payload),
+    });
+
+    if (!apiResponse.ok) {
+      const errorBody = await apiResponse.text();
+      // Don't send detailed Google errors back to the client for security. Log them instead.
+      console.error(`Google API Error: ${apiResponse.status}`, errorBody);
+      throw new Error(`Google API responded with status: ${apiResponse.status}`);
+    }
+
+    const data = await apiResponse.json();
+    
+    // Send the successful response back to the user's browser
+    response.status(200).json(data);
+
+  } catch (error) {
+    console.error('Error in proxy function:', error);
+    response.status(500).json({ error: 'An internal server error occurred.' });
+  }
+}
